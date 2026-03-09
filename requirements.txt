@@ -1,0 +1,4 @@
+beautifulsoup4>=4.12
+requests>=2.31
+sqlalchemy>=2.0
+urllib3>=2.0

@@ -1,32 +1,42 @@
 import re
-import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from bs4 import BeautifulSoup
 
 from .base import BaseScraper
 
 BASE = "https://andysorchids.com"
+_WORKERS = 5
 
 
 class AndysOrchidsScraper(BaseScraper):
     site = "andysorchids"
-    timeout = 600  # many genera + sleep between requests
+    timeout = 300  # parallelised, so much faster now
 
     def scrape(self) -> list[dict]:
         genera = self._get_genera()
-        products = []
-        seen_ids = set()
-        for i, genus in enumerate(genera, 1):
+        print(f"    [andysorchids] {len(genera)} genera to scrape")
+        results: list[dict] = []
+        seen_ids: set[str] = set()
+
+        def fetch(args):
+            i, genus = args
             print(f"    [andysorchids] genus {i}/{len(genera)}: {genus}")
-            try:
-                for p in self._scrape_genus(genus):
-                    if p["id"] not in seen_ids:
-                        seen_ids.add(p["id"])
-                        products.append(p)
-            except Exception as e:
-                print(f"    [andysorchids] Error scraping genus '{genus}': {e}")
-            time.sleep(0.1)
-        return products
+            return self._scrape_genus(genus)
+
+        with ThreadPoolExecutor(max_workers=_WORKERS) as pool:
+            futures = {pool.submit(fetch, (i, g)): g for i, g in enumerate(genera, 1)}
+            for future in as_completed(futures):
+                genus = futures[future]
+                try:
+                    for p in future.result():
+                        if p["id"] not in seen_ids:
+                            seen_ids.add(p["id"])
+                            results.append(p)
+                except Exception as e:
+                    print(f"    [andysorchids] Error scraping genus '{genus}': {e}")
+
+        return results
 
     def _get_genera(self) -> list[str]:
         soup = BeautifulSoup(self.get(f"{BASE}/genlist.asp").text, "html.parser")

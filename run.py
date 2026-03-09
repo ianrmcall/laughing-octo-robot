@@ -77,8 +77,8 @@ def main() -> None:
     prefix = "[DRY RUN] " if args.dry_run else ""
     print(f"{prefix}Starting plant database scraper...\n")
 
-    for scraper in scrapers:
-        run_scraper(scraper, dry_run=args.dry_run)
+    with ThreadPoolExecutor(max_workers=len(scrapers)) as pool:
+        list(pool.map(lambda s: run_scraper(s, dry_run=args.dry_run), scrapers))
 
     print("\nDone.")
 

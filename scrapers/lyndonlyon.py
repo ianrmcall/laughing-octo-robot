@@ -1,4 +1,5 @@
 import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import urllib3
 from bs4 import BeautifulSoup
@@ -10,17 +11,22 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 BASE = "https://lyndonlyon.com/store"
 TOP_LEVEL_PATHS = [1, 2, 3, 35]  # african_violets, gesneriads, other_plants, new_listings
+_WORKERS = 5
 
 
 class LyndonLyonScraper(BaseScraper):
     site = "lyndonlyon"
 
     def scrape(self) -> list[dict]:
-        products = []
-        seen_ids = set()
+        seen_ids: set[str] = set()
+        results: list[dict] = []
         leaf_cpaths = self._discover_leaf_cpaths()
-        for i, cpath in enumerate(leaf_cpaths, 1):
+        print(f"    [lyndonlyon] {len(leaf_cpaths)} categories to scrape")
+
+        def fetch_category(args):
+            i, cpath = args
             print(f"    [lyndonlyon] category {i}/{len(leaf_cpaths)}: cPath={cpath}")
+            cat_products = []
             page = 1
             while True:
                 try:
@@ -32,15 +38,26 @@ class LyndonLyonScraper(BaseScraper):
                     page_products = self._parse_listing(soup)
                     if not page_products:
                         break
-                    for p in page_products:
-                        if p["id"] not in seen_ids:
-                            seen_ids.add(p["id"])
-                            products.append(p)
+                    cat_products.extend(page_products)
                     page += 1
                 except Exception as e:
                     print(f"    [lyndonlyon] Error scraping cPath={cpath} page={page}: {e}")
                     break
-        return products
+            return cat_products
+
+        with ThreadPoolExecutor(max_workers=_WORKERS) as pool:
+            futures = {pool.submit(fetch_category, (i, cp)): cp for i, cp in enumerate(leaf_cpaths, 1)}
+            for future in as_completed(futures):
+                cpath = futures[future]
+                try:
+                    for p in future.result():
+                        if p["id"] not in seen_ids:
+                            seen_ids.add(p["id"])
+                            results.append(p)
+                except Exception as e:
+                    print(f"    [lyndonlyon] Error in category cPath={cpath}: {e}")
+
+        return results
 
     def _discover_leaf_cpaths(self) -> list:
         leaf_paths = []

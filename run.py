@@ -8,12 +8,34 @@ Usage:
 """
 
 import argparse
+import os
 import sys
+import threading
+import time
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from datetime import datetime, timezone
 
 import db
 from scrapers import SCRAPERS
+
+# Hard deadline: exit cleanly before the GHA job timeout kills us mid-step.
+# Set this a few minutes below the workflow's `timeout-minutes` so the
+# "Commit updated database" step still has time to run with partial results.
+SCRIPT_TIMEOUT_SECONDS = 25 * 60  # 25 minutes
+
+
+def _start_watchdog(timeout: int) -> None:
+    """Daemon thread: force-exit the process after *timeout* seconds."""
+    def _run():
+        time.sleep(timeout)
+        print(
+            f"\nWatchdog: script has been running for {timeout // 60} min; "
+            "forcing a clean exit so partial results are committed.",
+            flush=True,
+        )
+        os._exit(0)
+
+    threading.Thread(target=_run, daemon=True, name="watchdog").start()
 
 
 def run_scraper(scraper, dry_run: bool) -> None:
@@ -58,6 +80,8 @@ def run_scraper(scraper, dry_run: bool) -> None:
 
 
 def main() -> None:
+    _start_watchdog(SCRIPT_TIMEOUT_SECONDS)
+
     parser = argparse.ArgumentParser(description="Plant database scraper")
     parser.add_argument("--dry-run", action="store_true", help="Scrape but don't write to database")
     parser.add_argument("--site", help="Only scrape this site (e.g. ecuagenera)")

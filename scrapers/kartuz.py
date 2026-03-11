@@ -33,23 +33,29 @@ class KartuzScraper(BaseScraper):
     def _parse_category(self, soup: BeautifulSoup, page_url: str) -> list[dict]:
         products = []
         text = soup.get_text(separator="\n")
-        blocks = re.split(r"Quantity(?:\s+in\s+Basket)?:", text)
 
-        for block in blocks:
-            code_match = re.search(r"Code:\s*(\S+)", block)
-            price_match = re.search(r"Price:\s*(\$[\d.]+)", block)
-            if not code_match or not price_match:
-                continue
+        # Match full product pattern: Code, Price, then Quantity in Basket value.
+        # Using a single regex ensures stock status is paired with the correct product.
+        pattern = re.compile(
+            r"Code:\s*(\S+).*?"
+            r"Price:\s*(\$[\d.]+).*?"
+            r"Quantity\s+in\s+Basket:\s*(\S+)",
+            re.DOTALL,
+        )
 
-            code = code_match.group(1)
-            price = price_match.group(1)
+        for m in pattern.finditer(text):
+            code = m.group(1)
+            price = m.group(2)
+            basket_val = m.group(3)
 
-            before_code = block[: code_match.start()].strip()
+            # "none" in basket means item is available for purchase
+            in_stock = basket_val.lower() == "none"
+
+            # Name: last non-empty line before "Code:" in the full text
+            before_code = text[: m.start()].strip()
             lines = [l.strip() for l in before_code.split("\n") if l.strip()]
             name = lines[-1] if lines else "Unknown"
             name = re.sub(r"\s+", " ", name).strip()
-
-            in_stock = "none" in block[: price_match.start()].lower()
 
             products.append({
                 "id": f"{self.site}:{code}",

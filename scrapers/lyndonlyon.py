@@ -127,3 +127,26 @@ class LyndonLyonScraper(BaseScraper):
                 "in_stock": in_stock,
             })
         return products
+
+
+if __name__ == "__main__":
+    import json
+    import sys
+
+    scraper = LyndonLyonScraper()
+    print(f"Running {scraper.site} scraper...")
+
+    try:
+        products = scraper.scrape()
+        print(f"Found {len(products)} products.\n")
+
+        if "--json" in sys.argv:
+            print(json.dumps(products, indent=2))
+        else:
+            for p in products:
+                stock = "IN STOCK" if p["in_stock"] else "out of stock"
+                print(f"  [{stock}] {p['name']} — {p['price']}")
+                print(f"    {p['product_url']}")
+    except Exception as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)

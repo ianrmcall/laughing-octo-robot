@@ -1,0 +1,7 @@
+{
+  "ecuagenera": { "enabled": true },
+  "ecuageneraus": { "enabled": true },
+  "andysorchids": { "enabled": true },
+  "kartuz": { "enabled": true },
+  "lyndonlyon": { "enabled": true, "verify_ssl": false }
+}

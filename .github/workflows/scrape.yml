@@ -32,12 +32,10 @@ jobs:
           git diff --cached --quiet || git commit -m "chore: update plant database [skip ci]"
           git push
 
-      - name: Upload database to S3
+      - name: Export to S3
         if: env.AWS_ACCESS_KEY_ID != ''
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
-        run: |
-          pip install awscli
-          aws s3 cp plants.db s3://ian-first-plant-scraping-database/plants.db
+          AWS_DEFAULT_REGION: us-west-2
+        run: python s3_export.py
